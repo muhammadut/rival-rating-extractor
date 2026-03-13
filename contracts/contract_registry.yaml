@@ -1,0 +1,172 @@
+# Rating Extractor — Contract Registry
+# Source of truth for all artifact schemas produced by skills and agents.
+# Version: 0.1.0
+
+artifacts:
+
+  # ── Workspace Configuration ──────────────────────────────────────────
+
+  manual_catalog_yaml:
+    description: "Master lookup mapping carrier names to their rating manual PDFs. Built by /re-index, consumed by /re-init."
+    produced_by: "/re-index"
+    consumed_by: ["/re-init"]
+    location: "{plugin_root}/knowledge/manual-catalog.yaml"
+    format: "yaml"
+    schema:
+      source_folder: "string (absolute path to PDF folder)"
+      indexed_at: "string (ISO 8601)"
+      total_manuals: "integer"
+      carriers:
+        "{carrier_name}":
+          aliases: ["string"]
+          manuals:
+            - slug: "string (kebab-case)"
+              title: "string"
+              lob: "string"
+              province: "string (2-letter)"
+              effective_date: "string (YYYY-MM-DD)"
+              source_path: "string (absolute path to PDF)"
+              total_pages: "integer"
+              toc_path: "string (relative to plugin_root/knowledge/)"
+
+  paths_md:
+    description: "Resolved absolute paths for all plugin resources. MUST be read first by every /re-* command."
+    produced_by: "/re-init"
+    consumed_by: ["/re-query", "/re-bridge"]
+    location: "{carrier_root}/.re-workstreams/paths.md"
+    format: "markdown table"
+    required_keys:
+      - plugin_root
+      - carrier_root
+      - carrier_name
+      - workstreams
+      - manual_catalog
+      - manual_reader_agent
+      - code_mapper_agent
+      - contract_registry
+      - build_index_tool
+      - python_cmd
+      - vb_parser           # "NOT_FOUND" if unavailable
+    dynamic_keys:
+      - "manual:{slug}"     # one per discovered manual
+      - "toc:{slug}"        # one per indexed manual
+
+  config_yaml:
+    description: "Carrier metadata, manual inventory, and structural information."
+    produced_by: "/re-init"
+    consumed_by: ["/re-query", "/re-bridge", "/re-index"]
+    location: "{carrier_root}/.re-workstreams/config.yaml"
+    format: "yaml"
+    schema:
+      carrier_name: "string"
+      carrier_root: "string (absolute path)"
+      initialized_at: "string (ISO 8601)"
+      manuals:
+        - slug: "string (kebab-case)"
+          title: "string"
+          filename: "string"
+          path: "string (absolute path)"
+          total_pages: "integer"
+          indexed: "boolean"
+      provinces:                 # optional, for /re-bridge
+        - code: "string (2-letter)"
+          name: "string"
+          lobs: ["string"]
+          code_dir: "string (absolute path)"
+      carrier_prefix: "string"  # optional, e.g., "PORT"
+      tools:
+        vb_parser: "string (path or NOT_FOUND)"
+        python_cmd: "string"
+
+  # ── Manual Index ─────────────────────────────────────────────────────
+
+  toc_yaml:
+    description: "Table of contents with section-to-page mappings and keyword index for a single manual."
+    produced_by: ["/re-index"]
+    consumed_by: ["/re-query", "/re-bridge"]
+    location: "{plugin_root}/knowledge/manual-index/{slug}/toc.yaml"
+    format: "yaml"
+    schema:
+      manual_slug: "string (kebab-case, matches directory name)"
+      title: "string"
+      carrier: "string (carrier name)"
+      carrier_aliases: ["string"]
+      lob: "string"
+      province: "string (2-letter code)"
+      effective_date: "string (YYYY-MM-DD)"
+      source_file: "string (original filename)"
+      source_path: "string (absolute path to PDF)"
+      total_pages: "integer"
+      indexed_at: "string (ISO 8601)"
+      sections:
+        - name: "string (section heading)"
+          pages: "[start_page, end_page]"
+      keyword_index:
+        "{keyword}": "[start_page, end_page]"
+    notes: |
+      - Page numbers are 1-indexed (matching PDF page labels)
+      - Section page ranges are inclusive: [start, end]
+      - Keywords are lowercase for case-insensitive matching
+      - Multiple keywords can map to the same page range
+
+  # ── Agent Contracts ──────────────────────────────────────────────────
+
+  manual_reader_input:
+    description: "Input contract for the manual-reader sub-agent."
+    produced_by: ["/re-query", "/re-bridge"]
+    consumed_by: ["manual-reader agent"]
+    format: "structured text in agent prompt"
+    schema:
+      question: "string (the developer's question)"
+      manual_slug: "string"
+      manual_title: "string"
+      source_path: "string (absolute path to PDF)"
+      total_pages: "integer"
+      target_pages: "string (page ranges, e.g., '45-52, 73-75')"
+      toc_context: "string (matched TOC sections for context)"
+
+  manual_reader_output:
+    description: "Output contract for the manual-reader sub-agent."
+    produced_by: ["manual-reader agent"]
+    consumed_by: ["/re-query", "/re-bridge"]
+    format: "markdown"
+    schema:
+      answer: "string (direct answer with bullet points)"
+      citations:
+        - manual: "string (slug)"
+          page: "integer"
+          section: "string (heading)"
+          quoted_text: "string (exact text from manual)"
+      confidence: "enum (HIGH, MEDIUM, LOW)"
+      notes: "string (caveats, cross-references, ambiguities)"
+
+  code_mapper_input:
+    description: "Input contract for the code-mapper sub-agent (Phase 2)."
+    produced_by: ["/re-bridge"]
+    consumed_by: ["code-mapper agent"]
+    format: "structured text in agent prompt"
+    schema:
+      rules: "string (extracted rules from manual-reader answer)"
+      carrier_root: "string (absolute path)"
+      province: "string (2-letter code, optional)"
+      lob: "string (optional)"
+      vb_parser_path: "string (path to vb-parser.exe or NOT_FOUND)"
+      code_dir: "string (absolute path to Code/ directory)"
+
+  code_mapper_output:
+    description: "Output contract for the code-mapper sub-agent (Phase 2)."
+    produced_by: ["code-mapper agent"]
+    consumed_by: ["/re-bridge"]
+    format: "markdown"
+    schema:
+      matches:
+        - file: "string (relative path from carrier root)"
+          function: "string (function name)"
+          line_start: "integer"
+          line_end: "integer"
+          snippet: "string (relevant code excerpt)"
+          match_type: "enum (EXACT, PROBABLE, POSSIBLE)"
+          confidence: "enum (HIGH, MEDIUM, LOW)"
+          reasoning: "string (why this code matches the manual rule)"
+      unmatched_rules: "list of rules with no code match found"
+      notes: "string"

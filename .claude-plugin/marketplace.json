@@ -1,0 +1,22 @@
+{
+  "name": "rating-extractor-marketplace",
+  "owner": {
+    "name": "muhammadut"
+  },
+  "metadata": {
+    "description": "Rating manual PDF reader with page citations and VB.NET code bridge for TBW carriers."
+  },
+  "plugins": [
+    {
+      "name": "rating-extractor",
+      "source": {
+        "source": "github",
+        "repo": "muhammadut/rating-extractor"
+      },
+      "description": "4 skills (re-init, re-query, re-bridge, re-index) + 2 agents (manual-reader, code-mapper). Reads rating manual PDFs with page citations and maps business rules to VB.NET code.",
+      "version": "0.1.0",
+      "license": "MIT",
+      "keywords": ["insurance", "rating-manual", "pdf", "vbnet", "citations"]
+    }
+  ]
+}

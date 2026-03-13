@@ -1,0 +1,15 @@
+{
+  "name": "@muhammadut/rating-extractor",
+  "version": "0.1.0",
+  "description": "Bridges insurance rating manual PDFs with VB.NET carrier code. Answers manual questions with page citations and maps rules to code locations.",
+  "keywords": ["claude-code-plugin", "insurance", "rating-manual", "pdf", "vbnet", "citations"],
+  "license": "MIT",
+  "files": [
+    ".claude-plugin/",
+    "skills/",
+    "agents/",
+    "contracts/",
+    "tools/",
+    "CLAUDE.md"
+  ]
+}
