@@ -148,10 +148,13 @@ For the best-matching manual (or each manual if `--all` and multiple match):
 2. Launch the sub-agent:
    ```
    Agent tool:
-     subagent_type: "general-purpose"
+     subagent_type: "manual-reader"
      prompt: {the built prompt above}
      description: "Read manual pages for query"
    ```
+
+   The `manual-reader` agent has `tools: Read` — it can ONLY use the Read tool.
+   No Bash, no Python, no external PDF tools. Enforced at the agent level.
 
 3. If searching multiple manuals, launch agents in parallel (one per manual).
 

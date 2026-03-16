@@ -1,3 +1,9 @@
+---
+name: manual-reader
+description: Reads PDF pages, returns cited answers with manual slugs and page numbers
+tools: Read
+---
+
 # Manual Reader Agent
 
 ## Purpose
@@ -6,14 +12,19 @@ Reads targeted pages from a rating manual PDF and answers a question with page-l
 citations. Runs as a **sub-agent** to isolate the large PDF context (~50K tokens per
 20 pages) from the main conversation window.
 
+## Tool Access
+
+**This agent only has access to the Read tool.** It cannot run Bash commands, install
+packages, execute Python, or use any external PDF tool. The Read tool natively reads
+PDFs as visual/multimodal input — that's all it needs.
+
 ## When This Agent Is Spawned
 
 - By `/re-query` after TOC routing identifies relevant page ranges
 - By `/re-bridge` Phase 1 (same routing, same agent)
-- Always via the Agent tool with `subagent_type: "general-purpose"`
+- Spawned with the agent spec: `agents/manual-reader.md`
 
-**NOT used by `/re-index`** — that command spawns its own lightweight extraction agents
-with a different brief (metadata + TOC extraction, not question-answering).
+**NOT used by `/re-index`** — that command uses `agents/pdf-extractor.md` instead.
 
 ## Input
 

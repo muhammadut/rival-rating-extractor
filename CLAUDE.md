@@ -96,8 +96,9 @@ rating-extractor/                        <- PLUGIN CODE (ships to marketplace)
     re-query/SKILL.md                    <- /re-query: answer manual questions
     re-bridge/SKILL.md                   <- /re-bridge: manual answer + code location
   agents/
-    manual-reader.md                     <- Reads PDF pages, returns cited answers
-    code-mapper.md                       <- Maps manual rules to VB.NET code
+    pdf-extractor.md                     <- /re-index: reads pages 1-10, extracts metadata + TOC (tools: Read)
+    manual-reader.md                     <- /re-query, /re-bridge: reads targeted pages, cited answers (tools: Read)
+    code-mapper.md                       <- /re-bridge: maps rules to VB.NET code (tools: Read, Grep, Glob, Bash)
   contracts/
     contract_registry.yaml               <- Artifact schemas (source of truth)
   tools/                                 <- Reserved for future non-PDF tooling (e.g., vb-parser wrappers)
@@ -151,10 +152,25 @@ This avoids scanning 269+ pages for every question.
 
 ## Agent Architecture
 
+All agents have **restricted tool access** defined in their frontmatter. This is enforced
+at the agent level — not just by prompt instructions. An agent with `tools: Read` physically
+cannot run Bash commands, install packages, or use external PDF tools.
+
+| Agent | Tools | Used By | Purpose |
+|-------|-------|---------|---------|
+| `pdf-extractor` | Read only | `/re-index` | Quick-scan pages 1-10, extract metadata + TOC |
+| `manual-reader` | Read only | `/re-query`, `/re-bridge` | Read targeted pages, answer with citations |
+| `code-mapper` | Read, Grep, Glob, Bash | `/re-bridge` | Map rules to VB.NET code via vb-parser |
+
+**pdf-extractor:** Reads first 5-10 pages of each PDF during indexing. Extracts carrier
+name, LOB, province, TOC, and enrichment data from TOC headings. Returns YAML only.
+Read-only — cannot install anything or run external tools.
+
 **manual-reader:** Receives question + PDF paths + targeted page ranges. Returns answer
-with citations (manual slug, page number, quoted text, confidence). Runs as sub-agent
-to isolate PDF context (~50K tokens per 20 pages) from main window.
+with citations (manual slug, page number, quoted text, confidence). Read-only — cannot
+install anything or run external tools.
 
 **code-mapper:** Receives extracted rules + carrier root + scope. Uses vb-parser.exe
 (Roslyn-based) for structural analysis — function boundaries, call chains, line numbers.
-Grep for file discovery only. Falls back to grep+Read if parser unavailable (with warning).
+Needs Bash for vb-parser and Grep for file discovery. Falls back to grep+Read if parser
+unavailable (with warning).

@@ -310,10 +310,14 @@ IMPORTANT: Return ONLY the YAML block. No extra commentary.
 **Agent call pattern:**
 ```
 Agent tool:
-  subagent_type: "general-purpose"
+  subagent_type: "pdf-extractor"
   description: "Read PDF: {filename}"
   prompt: {the brief above}
 ```
+
+The `pdf-extractor` agent (defined in `agents/pdf-extractor.md`) has `tools: Read` —
+it physically CANNOT run Bash, Python, pip install, or any external tool. Only the
+Read tool is available to it. This is enforced at the agent level, not just by prompt.
 
 **Batching: NEVER more than 4 agents at a time.**
 - Batch 1: PDFs 1-4 (launch 4 agents in parallel)

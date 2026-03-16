@@ -1,3 +1,9 @@
+---
+name: code-mapper
+description: Maps manual business rules to VB.NET code locations using vb-parser and grep
+tools: Read, Grep, Glob, Bash
+---
+
 # Code Mapper Agent
 
 ## Purpose
