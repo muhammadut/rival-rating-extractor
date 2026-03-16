@@ -218,9 +218,12 @@ INSTRUCTIONS:
    "RRM" = Red River Mutual, "AB 2025-09" = Alberta revision). Also check
    pages 5-10 where binding authority sections often first mention the carrier.
 
-4. From what you SEE on the pages, extract ALL of the following:
+4. ONLY extract from pages 1-10. Do NOT read beyond page 10.
+   You are doing a quick scan — like a human flipping through the first
+   few pages and reading the Table of Contents. Everything below comes
+   from the cover page, TOC headings, and page headers/footers.
 
-   METADATA (required):
+   METADATA (required — from cover page, title page, headers, footers):
    - carrier_name: The insurance carrier / company name
    - carrier_aliases: Other names/abbreviations (from headers, footers, logos)
    - lob: Line of business (Auto, Residential, Farm, Condo, Tenant, etc.)
@@ -231,31 +234,36 @@ INSTRUCTIONS:
    - total_pages: From PDF metadata or last visible page number
    - confidence: HIGH / MEDIUM / LOW
 
-   METADATA (extract if visible — enriches search):
+   METADATA (from TOC headings and page footers — only if visible on pages 1-10):
    - organization_type: "facility_association" | "private_carrier" | "mutual" | "other"
    - revision_id: Version/revision stamp from footers (e.g., "2025-09", "v1.0")
-   - page_numbering: "sequential" | "dual" (if manual uses section-based like A-1, B-2)
-   - footer_pattern: The repeating footer text pattern (e.g., "Manitoba RRM - Residential Underwriting / Rate Manual 12/25 {page}")
-   - rule_numbering: Numbering convention (e.g., "Rule 100-129", "Section A-N", "Section 1-7")
-   - multi_province: true if manual covers multiple provinces (e.g., "NB & NS")
-   - product_lines: List of product/package types mentioned in TOC
+   - page_numbering: "sequential" | "dual" (if TOC uses section-based like A-1, B-2)
+   - footer_pattern: The repeating footer text pattern you see on the pages you read
+   - rule_numbering: Numbering convention visible in TOC (e.g., "Rule 100-129", "Section A-N")
+   - multi_province: true if cover/title states multiple provinces (e.g., "NB & NS")
+   - product_lines: Scan TOC headings for package/product names
      (e.g., ["Homeowners Comprehensive", "Tenants", "Condo", "Seasonal", "Farm"])
-   - discount_types: List of discount names found in TOC
-     (e.g., ["Claims Free", "Multi-Vehicle", "New Home", "Mature Policyholder", "genNow!"])
-   - surcharge_types: List of surcharge names found in TOC
+   - discount_types: Scan TOC headings for discount section names
+     (e.g., ["Claims Free", "Multi-Vehicle", "New Home", "genNow!"])
+   - surcharge_types: Scan TOC headings for surcharge section names
      (e.g., ["Claims Surcharge", "Heating Surcharge", "Conviction Surcharge"])
-   - rating_variables: Key rating factors mentioned in TOC
+   - rating_variables: Scan TOC headings for rating factor names
      (e.g., ["Territory", "Rating Class", "Vehicle Rate Group", "Grid", "Deductible"])
-   - endorsement_codes: Form/endorsement codes found in TOC
-     (e.g., ["Form 2170", "END 44", "SPF 9", "VAP-1225", "Form 0304"])
-   - coverage_types: Types of coverage available
-     (e.g., ["Liability", "Accident Benefits", "Physical Damage", "Comprehensive", "All Perils"])
+   - endorsement_codes: Scan TOC headings for form/endorsement codes
+     (e.g., ["Form 2170", "END 44", "SPF 9", "VAP-1225"])
+   - coverage_types: Scan TOC headings for coverage type names
+     (e.g., ["Liability", "Accident Benefits", "Physical Damage", "All Perils"])
+
+   All enrichment fields above are harvested from TOC HEADINGS — they are
+   section names you can see in the Table of Contents. Do not read into the
+   manual body to find these. If a TOC doesn't list discounts/surcharges/etc.
+   by name, just leave those fields empty.
 
    TABLE OF CONTENTS:
-   - Extract EVERY section name and its starting page number
-   - Preserve the exact section names as printed (including rule numbers, form codes)
+   - Extract every section name and its starting page number as printed in the TOC
+   - Preserve the exact section names (including rule numbers, form codes)
    - Include sub-sections if visible (e.g., "Rule 108 — Clean Driver Discount")
-   - If no formal TOC page, extract section headings from pages 1-10
+   - If no formal TOC page, extract section headings visible on pages 1-10
    - Note the physical PDF page where each section starts (not internal section numbering)
 
 5. Return your findings in this EXACT format (YAML):
