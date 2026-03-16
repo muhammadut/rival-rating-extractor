@@ -132,8 +132,13 @@ For the best-matching manual (or each manual if `--all` and multiple match):
    - "genNow! Discount" (pages 45-52) — matched keyword "gennow"
    - "Discount Summary" (pages 73-75) — matched keyword "discount"
 
+   CRITICAL: Use Claude Code's built-in Read tool to read the PDF. Call it as:
+   Read(file_path="{source_path}", pages="{page_range}")
+   NEVER use Bash, Python, pdftotext, or any external tool. The Read tool reads
+   PDFs natively as visual/multimodal input — Claude sees each page as an image.
+
    INSTRUCTIONS:
-   1. Read the target pages from the PDF using the Read tool
+   1. Read the target pages from the PDF using the Read tool (max 20 pages per call)
    2. Answer the question with specific page citations
    3. Quote the exact source text that supports your answer
    4. If the answer spans multiple sections, cite each separately

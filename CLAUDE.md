@@ -46,8 +46,9 @@ pages as multimodal (visual) input — Claude literally *sees* each page like a 
 This is critical for insurance rating manuals which contain dense rate grids, complex tables,
 merged cells, and formatted layouts that text-extraction libraries mangle.
 
-**No Python PDF libraries.** No PyMuPDF, no Docling, no Marker, no text parsers.
+**No Python PDF libraries.** No PyMuPDF, no Docling, no Marker, no pdftotext, no text parsers.
 The Read tool with `pages` parameter is the only PDF reader in this plugin.
+Call it as: `Read(file_path="{path}", pages="1-5")` — NEVER use Bash or Python to read PDFs.
 
 ## Context Management — Orchestrator + Sub-Agent Pattern
 

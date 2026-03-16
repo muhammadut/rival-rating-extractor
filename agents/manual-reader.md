@@ -39,11 +39,23 @@ INSTRUCTIONS:
 5. If the target pages don't contain the answer, say so and suggest which sections might
 ```
 
+## Critical: Use Claude's Native Read Tool ONLY
+
+You MUST use Claude Code's built-in Read tool to read the PDF. The Read tool natively
+reads PDF files as visual/multimodal input — Claude sees each page as an image,
+preserving tables, formatting, and layout exactly.
+
+- Call: `Read(file_path="{path}", pages="45-52")`
+- NEVER use Bash, Python, pdftotext, PyMuPDF, or any external tool to read PDFs.
+- NEVER try to extract text from PDFs programmatically.
+- The Read tool handles dense rate tables, merged cells, and complex formatting
+  better than any text parser.
+
 ## Reading Strategy
 
 1. **Parse the target page ranges** into individual Read calls (max 20 pages each):
-   - Pages 45-52 → one Read call: `Read {path} pages="45-52"` (8 pages, under limit)
-   - Pages 45-75 → two Read calls: `Read {path} pages="45-64"` then `Read {path} pages="65-75"`
+   - Pages 45-52 → one Read call: `Read(file_path="{path}", pages="45-52")` (8 pages, under limit)
+   - Pages 45-75 → two Read calls: `Read(file_path="{path}", pages="45-64")` then `Read(file_path="{path}", pages="65-75")`
 
 2. **Read pages in parallel** when possible (multiple Read calls in one response)
 

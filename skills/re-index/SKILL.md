@@ -123,15 +123,25 @@ You are a PDF metadata extractor for insurance rating manuals.
 PDF PATH: {absolute path to PDF}
 FILENAME: {filename}
 
+CRITICAL RULES — READ BEFORE DOING ANYTHING:
+- You MUST use Claude Code's built-in Read tool to read the PDF. The Read tool
+  natively reads PDF files as visual/multimodal input — Claude sees each page
+  as an image, preserving tables, formatting, and layout exactly.
+- Call the Read tool like this: Read(file_path="{pdf_path}", pages="1-5")
+- NEVER use Bash, Python, pdftotext, PyMuPDF, or any external tool to read PDFs.
+- NEVER try to extract text from PDFs programmatically.
+- The Read tool is all you need. It handles complex rate tables, merged cells,
+  and dense formatting better than any text parser.
+
 INSTRUCTIONS:
 1. Read pages 1-5 of the PDF using the Read tool:
-   Read {pdf_path} pages="1-5"
+   Read(file_path="{pdf_path}", pages="1-5")
 
 2. If a Table of Contents is found but extends beyond page 5, read additional pages
    to capture the full TOC (up to page 10):
-   Read {pdf_path} pages="6-10"
+   Read(file_path="{pdf_path}", pages="6-10")
 
-3. From what you see, extract:
+3. From what you see (Claude visually reads each page), extract:
 
    METADATA:
    - carrier_name: The insurance carrier / company name
