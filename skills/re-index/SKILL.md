@@ -1,6 +1,6 @@
 ---
 name: re-index
-description: Scan a folder of rating manual PDFs, spawn sub-agents to read first pages, extract carrier/LOB metadata and TOC, build the master catalog. Run this first before /re-init.
+description: Scan a folder of rating manual PDFs, spawn sub-agents to read first pages, extract rich metadata and TOC, build the master catalog. Run this first before /re-init.
 user-invocable: true
 ---
 
@@ -17,9 +17,10 @@ to code locations. Carrier-agnostic — swap the PDFs and it works for any insur
 - **Claude Code** — that's it
 - **Claude's built-in Read tool** reads PDFs natively as multimodal (visual) input.
   Claude *sees* each page — dense rate grids, complex tables, merged cells, footnotes —
-  exactly as a human would. No Python PDF libraries, no text parsers, no RAG pipeline.
-- **No external dependencies** — no PyMuPDF, no Docling, no vector stores.
-  The Read tool with `pages` parameter is the only PDF reader in this plugin.
+  exactly as a human would.
+- **No external dependencies** — no Python, no PyMuPDF, no pdftotext, no Docling, no
+  pdf-parse, no pdfjs-dist, no vector stores. The Read tool with `pages` parameter is
+  the ONLY PDF reader in this plugin.
 - Rating manual PDFs downloaded from SharePoint to a local folder
 
 ## Context Management — Orchestrator Pattern
@@ -31,19 +32,66 @@ blow the main context window.
 Instead, `/re-index` follows the **capsule pattern** from the iq-update plugin:
 
 1. Orchestrator scans the folder, lists PDFs (lightweight — just filenames)
-2. Orchestrator builds a **brief** per PDF (path + what to extract)
-3. Orchestrator spawns **sub-agents** to read each PDF's first pages
-4. Sub-agents use Claude's Read tool (multimodal), extract metadata + TOC, return concise structured results
-5. Orchestrator receives concise results (~1-2K tokens each), aggregates into YAML files
-6. Main context stays clean — never sees PDF content
+2. Orchestrator checks the cache — skip PDFs already indexed (unless `--rebuild`)
+3. Orchestrator builds a **brief** per PDF (path + what to extract)
+4. Orchestrator spawns **sub-agents** (max 4 at a time) to read each PDF's first pages
+5. Sub-agents use Claude's Read tool (multimodal), extract metadata + TOC, return concise results
+6. Orchestrator receives concise results (~2-3K tokens each), aggregates into YAML files
+7. Main context stays clean — never sees PDF content
+
+**HARD LIMIT: Never spawn more than 4 sub-agents at a time.** Wait for a batch to
+complete before launching the next batch.
+
+## Index Caching — Only Index Once
+
+The index is persisted in `{plugin_root}/knowledge/`. Once built, it serves all
+subsequent commands (`/re-init`, `/re-query`, `/re-bridge`) without re-reading PDFs.
+
+### Cache Check (Step 2 — before spawning any agents)
+
+When `/re-index` runs, BEFORE spawning sub-agents:
+
+1. Check if `{plugin_root}/knowledge/manual-catalog.yaml` exists
+2. If it exists, read it and compare:
+   - `source_folder` — does it match the folder being indexed?
+   - `indexed_at` — when was the last index?
+   - `pdf_files` — list of filenames at index time
+3. Glob the current folder for `*.pdf` files
+4. Compare current PDF list against cached `pdf_files` list:
+   - **No changes:** Show status and stop:
+     ```
+     Index already exists (built 2026-03-12T14:00:00Z)
+     Source: C:\manuals (21 PDFs)
+     No changes detected — all 21 PDFs match the existing index.
+
+     Use --rebuild to force a full re-index.
+     Ready: cd to a carrier folder and run /re-init
+     ```
+   - **New PDFs found:** Only index the new ones:
+     ```
+     Index exists (built 2026-03-12T14:00:00Z, 18 PDFs)
+     3 new PDFs detected:
+       - New Manual 2026.pdf
+       - Updated Auto Rates.pdf
+       - Farm Manual v2.pdf
+
+     Indexing new PDFs only...
+     ```
+   - **PDFs removed:** Warn but don't delete index entries:
+     ```
+     Warning: 2 PDFs in the index are no longer in the folder:
+       - Old Manual 2025.pdf
+       - Deprecated Rates.pdf
+     Their index entries are preserved. Use --rebuild to clean up.
+     ```
+5. If `--rebuild` flag is present: ignore cache, re-index everything from scratch
 
 ## Purpose
 
 Takes a path to a folder where the developer saved rating manual PDFs. Spawns sub-agents
 that use Claude's Read tool to visually read the first few pages of each PDF, extracting
-metadata (carrier name, LOB, province, effective date) and table of contents. Produces a
-**master catalog** that maps carrier names to their manuals, plus a TOC index per manual
-for query routing.
+rich metadata and table of contents. Produces a **master catalog** that maps carrier names
+to their manuals, plus a TOC index per manual for query routing.
 
 **This is the first command you run.** Before any `/re-init`, before any `/re-query`.
 Download your PDFs from SharePoint, point `/re-index` at the folder, done.
@@ -69,7 +117,7 @@ Optional flags:
 
 All outputs go to `{plugin_root}/knowledge/`:
 
-1. **`manual-catalog.yaml`** — Master lookup: carrier name → list of manuals with paths
+1. **`manual-catalog.yaml`** — Master lookup: carrier name → list of manuals with paths + cache metadata
 2. **`manual-index/{slug}/toc.yaml`** — Per-manual TOC with section→page mappings + keyword index
 3. **`manual-index/{slug}/manifest.json`** — Per-manual metadata (page count, section count, etc.)
 
@@ -82,7 +130,7 @@ Determine plugin root from THIS skill file's location:
 plugin_root = go up from skills/re-index/SKILL.md → rating-extractor/
 ```
 
-### Step 2: Scan the Folder for PDFs (Orchestrator — Lightweight)
+### Step 2: Cache Check + Scan the Folder (Orchestrator — Lightweight)
 
 1. If no path in `$ARGUMENTS`, ask: "Where did you save the rating manual PDFs?"
 
@@ -97,7 +145,11 @@ plugin_root = go up from skills/re-index/SKILL.md → rating-extractor/
    - "No PDF files found in `{path}`. Check the path and try again."
    - Stop.
 
-5. Present what was found:
+5. **Check cache** — read `{plugin_root}/knowledge/manual-catalog.yaml` if it exists.
+   Compare `pdf_files` list against current folder. Follow the Cache Check logic above.
+   If no changes and no `--rebuild`, show status and stop.
+
+6. Present what will be indexed:
    ```
    Found 21 PDFs in C:\manuals:
      1. 2025 04 01 Auto Rate Manual (posted 2025 01 24).pdf
@@ -105,15 +157,16 @@ plugin_root = go up from skills/re-index/SKILL.md → rating-extractor/
      3. Auto Pro Manual ON_2026_01.pdf
      ...
 
-   Spawning sub-agents to read first pages...
+   Spawning sub-agents to read first pages (max 4 at a time)...
    ```
 
 **NOTE:** The orchestrator only lists filenames here. It does NOT read any PDF content.
 
 ### Step 3: Spawn PDF Reader Sub-Agents
 
-For each PDF, spawn a sub-agent to read its first pages and extract metadata + TOC.
-Launch agents in parallel (batch 3-4 at a time to avoid overload).
+For each PDF that needs indexing, spawn a sub-agent to read its first pages and extract
+metadata + TOC. **Launch exactly 4 agents at a time, no more.** Wait for the batch to
+complete, then launch the next batch of up to 4.
 
 **Sub-agent brief (the prompt passed to each Agent call):**
 
@@ -123,48 +176,94 @@ You are a PDF metadata extractor for insurance rating manuals.
 PDF PATH: {absolute path to PDF}
 FILENAME: {filename}
 
-CRITICAL RULES — READ BEFORE DOING ANYTHING:
-- You MUST use Claude Code's built-in Read tool to read the PDF. The Read tool
-  natively reads PDF files as visual/multimodal input — Claude sees each page
-  as an image, preserving tables, formatting, and layout exactly.
-- Call the Read tool like this: Read(file_path="{pdf_path}", pages="1-5")
-- NEVER use Bash, Python, pdftotext, PyMuPDF, or any external tool to read PDFs.
-- NEVER try to extract text from PDFs programmatically.
-- The Read tool is all you need. It handles complex rate tables, merged cells,
-  and dense formatting better than any text parser.
+════════════════════════════════════════════════════════════════════
+MANDATORY: HOW TO READ THE PDF
+════════════════════════════════════════════════════════════════════
+
+You MUST use Claude Code's built-in Read tool. This is a HARD REQUIREMENT.
+
+The Read tool natively reads PDF files as visual/multimodal input.
+Claude sees each page as an image — tables, formatting, layout are
+all preserved exactly as printed. This is critical for insurance
+documents with dense rate grids and complex formatting.
+
+To read pages 1-5, call:
+  Read(file_path="{pdf_path}", pages="1-5")
+
+To read pages 6-10, call:
+  Read(file_path="{pdf_path}", pages="6-10")
+
+ABSOLUTELY FORBIDDEN:
+  - Do NOT use Bash to run any command
+  - Do NOT use Python, pdftotext, pdfjs, pdf-parse, or ANY external tool
+  - Do NOT try to install anything
+  - Do NOT try to extract text programmatically
+  - Do NOT use any tool other than Read to access the PDF
+
+If you use anything other than the Read tool, your output will be
+discarded and the PDF will be re-processed. Just use Read.
+
+════════════════════════════════════════════════════════════════════
 
 INSTRUCTIONS:
-1. Read pages 1-5 of the PDF using the Read tool:
+
+1. Read pages 1-5 of the PDF:
    Read(file_path="{pdf_path}", pages="1-5")
 
-2. If a Table of Contents is found but extends beyond page 5, read additional pages
-   to capture the full TOC (up to page 10):
+2. If a Table of Contents extends beyond page 5, read pages 6-10:
    Read(file_path="{pdf_path}", pages="6-10")
 
-3. From what you see (Claude visually reads each page), extract:
+3. If the carrier name is not found on page 1, check page footers/headers
+   on every page you read. Carrier names often appear in footers (e.g.,
+   "RRM" = Red River Mutual, "AB 2025-09" = Alberta revision). Also check
+   pages 5-10 where binding authority sections often first mention the carrier.
 
-   METADATA:
+4. From what you SEE on the pages, extract ALL of the following:
+
+   METADATA (required):
    - carrier_name: The insurance carrier / company name
-     (e.g., "Portage Mutual", "OMAP", "Ontario Mutual Automobile Plan", "PMIC",
-      "SEM", "Unica", "The Commonwell", "Red River Mutual")
-   - carrier_aliases: Other names this carrier goes by
-   - lob: Line of business (Auto, Home/Residential, Condo, Tenant, Farm, etc.)
-   - province: Province or territory (full name and 2-letter code: Ontario/ON, Alberta/AB, etc.)
-   - effective_date: When this manual takes effect (YYYY-MM-DD format)
-   - title: The manual's own title as printed on cover/title page
-   - total_pages: Read the PDF to determine this (check last page number if visible)
+   - carrier_aliases: Other names/abbreviations (from headers, footers, logos)
+   - lob: Line of business (Auto, Residential, Farm, Condo, Tenant, etc.)
+   - province: 2-letter code (ON, AB, MB, SK, BC, NB, NS, etc.)
+   - province_full: Full name (Ontario, Alberta, Manitoba, etc.)
+   - effective_date: When this manual takes effect (YYYY-MM-DD)
+   - title: The manual's own printed title
+   - total_pages: From PDF metadata or last visible page number
+   - confidence: HIGH / MEDIUM / LOW
+
+   METADATA (extract if visible — enriches search):
+   - organization_type: "facility_association" | "private_carrier" | "mutual" | "other"
+   - revision_id: Version/revision stamp from footers (e.g., "2025-09", "v1.0")
+   - page_numbering: "sequential" | "dual" (if manual uses section-based like A-1, B-2)
+   - footer_pattern: The repeating footer text pattern (e.g., "Manitoba RRM - Residential Underwriting / Rate Manual 12/25 {page}")
+   - rule_numbering: Numbering convention (e.g., "Rule 100-129", "Section A-N", "Section 1-7")
+   - multi_province: true if manual covers multiple provinces (e.g., "NB & NS")
+   - product_lines: List of product/package types mentioned in TOC
+     (e.g., ["Homeowners Comprehensive", "Tenants", "Condo", "Seasonal", "Farm"])
+   - discount_types: List of discount names found in TOC
+     (e.g., ["Claims Free", "Multi-Vehicle", "New Home", "Mature Policyholder", "genNow!"])
+   - surcharge_types: List of surcharge names found in TOC
+     (e.g., ["Claims Surcharge", "Heating Surcharge", "Conviction Surcharge"])
+   - rating_variables: Key rating factors mentioned in TOC
+     (e.g., ["Territory", "Rating Class", "Vehicle Rate Group", "Grid", "Deductible"])
+   - endorsement_codes: Form/endorsement codes found in TOC
+     (e.g., ["Form 2170", "END 44", "SPF 9", "VAP-1225", "Form 0304"])
+   - coverage_types: Types of coverage available
+     (e.g., ["Liability", "Accident Benefits", "Physical Damage", "Comprehensive", "All Perils"])
 
    TABLE OF CONTENTS:
-   - Extract every section name and its starting page number
-   - Preserve the exact section names as printed
-   - If no formal TOC page exists, extract section headings visible in pages 1-5
+   - Extract EVERY section name and its starting page number
+   - Preserve the exact section names as printed (including rule numbers, form codes)
+   - Include sub-sections if visible (e.g., "Rule 108 — Clean Driver Discount")
+   - If no formal TOC page, extract section headings from pages 1-10
+   - Note the physical PDF page where each section starts (not internal section numbering)
 
-4. Return your findings in this EXACT format (YAML):
+5. Return your findings in this EXACT format (YAML):
 
    ```yaml
    metadata:
      carrier_name: "Portage Mutual"
-     carrier_aliases: ["Portage", "OMAP", "Ontario Mutual Automobile Plan"]
+     carrier_aliases: ["Portage", "OMAP"]
      lob: "Auto"
      province: "ON"
      province_full: "Ontario"
@@ -172,20 +271,30 @@ INSTRUCTIONS:
      title: "OMAP Auto Rate Manual"
      total_pages: 269
      confidence: HIGH
+     organization_type: "facility_association"
+     revision_id: "2025-04"
+     page_numbering: "sequential"
+     footer_pattern: "Alberta {date} {page_code} FACILITY ASSOCIATION"
+     rule_numbering: "Rule 100-129"
+     multi_province: false
+     product_lines: ["Private Passenger", "Commercial", "Public"]
+     discount_types: ["Clean Driver Discount", "Multi Vehicle Discount", "New Driver Credit"]
+     surcharge_types: ["Conviction Surcharges"]
+     rating_variables: ["Rating Territory", "Rating Class", "Vehicle Rate Group", "Grid", "Driving Record"]
+     endorsement_codes: ["END 44", "SPF 9", "POL 7", "POL 8"]
+     coverage_types: ["Liability", "Accident Benefits", "Physical Damage", "DCPD"]
 
    toc_entries:
-     - name: "Section Name As Printed"
-       start_page: 9
-     - name: "Another Section"
-       start_page: 45
+     - name: "Section A — General Information"
+       start_page: 4
+     - name: "Rule 108 — Clean Driver Discount"
+       start_page: 15
+     - name: "Rule 120 — Grid"
+       start_page: 22
    ```
 
-   Use confidence: HIGH if carrier/LOB/province are clearly stated.
-   Use confidence: MEDIUM if you had to infer some fields.
-   Use confidence: LOW if major fields are unclear.
-
-5. If you cannot determine the carrier name, set carrier_name to "UNKNOWN"
-   and explain what you see in a notes field.
+6. If you cannot determine the carrier name, set carrier_name to "UNKNOWN"
+   and add a notes field explaining what you see.
 
 IMPORTANT: Return ONLY the YAML block. No extra commentary.
 ```
@@ -198,8 +307,12 @@ Agent tool:
   prompt: {the brief above}
 ```
 
-**Parallelism:** Launch 3-4 agents in parallel per batch. Wait for batch to complete,
-then launch next batch.
+**Batching: NEVER more than 4 agents at a time.**
+- Batch 1: PDFs 1-4 (launch 4 agents in parallel)
+- Wait for Batch 1 to complete
+- Batch 2: PDFs 5-8 (launch 4 agents in parallel)
+- Wait for Batch 2 to complete
+- Continue until all PDFs processed
 
 ### Step 4: Collect and Validate Results
 
@@ -219,17 +332,24 @@ As each sub-agent returns:
 For each CONFIDENT PDF result:
 
 1. **Assign a slug** from the extracted metadata:
-   - Pattern: `{carrier}-{lob}-{date}` in kebab-case
-   - Examples: `portage-auto-rate-2025-04`, `omap-auto-pro-2026-01`, `portage-residential-2025-12`
+   - Pattern: `{carrier}-{lob}-{province}-{date}` in kebab-case
+   - Examples: `portage-auto-on-2025-04`, `sem-residential-nb-2026-04`, `rrm-residential-mb-2025-12`
 
 2. **Compute page ranges** from TOC entries:
    - Start page = listed TOC page number
    - End page = next section's start page - 1
    - Last section = total_pages
 
-3. **Build keyword index:**
+3. **Build keyword index** from ALL available data:
    - Tokenize each section name into keywords
    - Remove stop words (the, of, and, for, in, etc.)
+   - Add ALL extracted enrichment data as keywords:
+     - Each discount_type name → its TOC section's pages
+     - Each surcharge_type name → its TOC section's pages
+     - Each rating_variable name → its TOC section's pages
+     - Each endorsement_code → its TOC section's pages
+     - Each product_line name → its TOC section's pages
+     - Each coverage_type → its TOC section's pages
    - Add insurance domain synonyms:
      - "discount" ↔ "credit"
      - "surcharge" ↔ "loading"
@@ -237,11 +357,14 @@ For each CONFIDENT PDF result:
      - "deductible" ↔ "ded"
      - "liability" ↔ "liab"
      - "premium" ↔ "rate"
+     - "homeowners" ↔ "homeowner" ↔ "home"
+     - "condominium" ↔ "condo"
+     - "seasonal" ↔ "cottage"
    - Map each keyword to its section's page range
 
 4. **Write `{plugin_root}/knowledge/manual-index/{slug}/toc.yaml`:**
    ```yaml
-   manual_slug: "portage-auto-rate-2025-04"
+   manual_slug: "portage-auto-on-2025-04"
    title: "OMAP Auto Rate Manual"
    carrier: "Portage Mutual"
    carrier_aliases: ["Portage", "OMAP", "Ontario Mutual Automobile Plan"]
@@ -252,16 +375,31 @@ For each CONFIDENT PDF result:
    source_path: "C:\\manuals\\2025 04 01 Auto Rate Manual (posted 2025 01 24).pdf"
    total_pages: 269
    indexed_at: "2026-03-12T14:00:00Z"
+   organization_type: "facility_association"
+   revision_id: "2025-04"
+   page_numbering: "sequential"
+   rule_numbering: "Rule 100-129"
+   multi_province: false
+   product_lines: ["Private Passenger", "Commercial", "Public"]
+   discount_types: ["Clean Driver Discount", "Multi Vehicle Discount"]
+   surcharge_types: ["Conviction Surcharges"]
+   rating_variables: ["Rating Territory", "Rating Class", "Grid"]
+   endorsement_codes: ["END 44", "SPF 9"]
+   coverage_types: ["Liability", "Accident Benefits", "Physical Damage"]
    sections:
-     - name: "Territorial Base Rates"
-       pages: [9, 18]
-     - name: "genNow! Discount"
-       pages: [45, 52]
+     - name: "Section A — General Information"
+       pages: [4, 9]
+     - name: "Section B — Private Passenger"
+       pages: [10, 120]
+     - name: "Rule 108 — Clean Driver Discount"
+       pages: [15, 16]
    keyword_index:
+     "clean driver": [15, 16]
+     "discount": [15, 22]
+     "territory": [17, 20]
+     "grid": [22, 35]
      "gennow": [45, 52]
-     "territorial": [9, 18]
-     "base rate": [9, 18]
-     "deductible": [73, 85]
+     "end 44": [78, 80]
    ```
 
 5. **Write `manifest.json`** alongside toc.yaml with summary metadata.
@@ -276,48 +414,44 @@ Aggregate all indexed manuals into `{plugin_root}/knowledge/manual-catalog.yaml`
 # Source folder: C:\manuals
 #
 # /re-init reads this file to find manuals for a carrier.
+# /re-index reads this file to check the cache before re-indexing.
 
 source_folder: "C:\\manuals"
 indexed_at: "2026-03-12T14:00:00Z"
-total_manuals: 8
+total_manuals: 21
+
+# Cache: list of PDF filenames at index time (for change detection)
+pdf_files:
+  - "2025 04 01 Auto Rate Manual (posted 2025 01 24).pdf"
+  - "December 2025 ON Residential Pro Manual.pdf"
+  - "Auto Pro Manual ON_2026_01.pdf"
+  # ... all 21 filenames
 
 carriers:
   "Portage Mutual":
     aliases: ["Portage", "OMAP", "Ontario Mutual Automobile Plan"]
     manuals:
-      - slug: "portage-auto-rate-2025-04"
+      - slug: "portage-auto-on-2025-04"
         title: "OMAP Auto Rate Manual"
         lob: "Auto"
         province: "ON"
         effective_date: "2025-04-01"
         source_path: "C:\\manuals\\2025 04 01 Auto Rate Manual (posted 2025 01 24).pdf"
         total_pages: 269
-        toc_path: "manual-index/portage-auto-rate-2025-04/toc.yaml"
-      - slug: "portage-residential-2025-12"
-        title: "December 2025 ON Residential Pro Manual"
+        toc_path: "manual-index/portage-auto-on-2025-04/toc.yaml"
+
+  "Red River Mutual":
+    aliases: ["RRM", "Red River"]
+    manuals:
+      - slug: "rrm-residential-mb-2025-12"
+        title: "Residential Underwriting Manual"
         lob: "Residential"
-        province: "ON"
+        province: "MB"
         effective_date: "2025-12-01"
-        source_path: "C:\\manuals\\December 2025 ON Residential Pro Manual.pdf"
-        total_pages: 118
-        toc_path: "manual-index/portage-residential-2025-12/toc.yaml"
-
-  "Unica":
-    aliases: ["Unica Insurance"]
-    manuals:
-      - slug: "unica-auto-2025-07"
-        ...
-
-  "The Commonwell":
-    aliases: ["Commonwell"]
-    manuals:
-      - ...
+        source_path: "C:\\manuals\\Manitoba (Guidewire) Residential Rate Manual December 2025.pdf"
+        total_pages: 92
+        toc_path: "manual-index/rrm-residential-mb-2025-12/toc.yaml"
 ```
-
-**Carrier name matching rules:**
-- Extract the carrier name from PDF content (cover page, headers, footers)
-- Store aliases for fuzzy matching (e.g., "Portage Mutual" also matches "Portage", "OMAP")
-- If a manual serves multiple carriers (like OMAP pool manuals), list it under each
 
 ### Step 7: Handle Ambiguous PDFs
 
@@ -325,7 +459,7 @@ If any PDFs couldn't be confidently mapped to a carrier:
 
 ```
 Could not determine carrier for 1 PDF:
-  - "Generic Rate Guide 2025.pdf" — no carrier name found on first 5 pages
+  - "Generic Rate Guide 2025.pdf" — no carrier name found on first 10 pages
 
 Options:
   1. Assign it manually — tell me which carrier it belongs to
@@ -340,15 +474,13 @@ Wait for developer input before finalizing.
 Master catalog built from C:\manuals
 
 Carriers found:
-  Portage Mutual    — 3 manuals (Auto Rate, Auto Pro, Residential Pro)
-  Unica             — 2 manuals (Auto, Home)
-  The Commonwell    — 2 manuals (Auto, Home)
-  Red River         — 1 manual (Auto)
+  Portage Mutual    — 5 manuals (Auto Rate, Auto Pro, Residential, Farm AB, Farm MB)
+  Red River Mutual  — 2 manuals (Residential MB, Residential SK)
+  SE Mutual         — 1 manual (Rate Manual NB/NS)
+  Facility Assoc.   — 1 manual (AB Auto)
 
-Total: 8 manuals indexed, 0 skipped
-
-Catalog saved to: {plugin_root}/knowledge/manual-catalog.yaml
-TOC indexes in:   {plugin_root}/knowledge/manual-index/
+Total: 21 manuals indexed, 0 skipped
+Index saved: {plugin_root}/knowledge/manual-catalog.yaml
 
 Next: cd to a carrier folder and run /re-init
 ```
@@ -356,9 +488,9 @@ Next: cd to a carrier folder and run /re-init
 ## Re-running /re-index
 
 When manuals are updated (new PDFs downloaded from SharePoint):
-- Run `/re-index {path}` again — it will re-scan and rebuild
+- Run `/re-index {path}` again — cache check detects new/changed PDFs, indexes only those
 - Use `--rebuild` to discard and recreate everything from scratch
-- Without `--rebuild`, existing entries are updated if the PDF changed, new PDFs are added
+- Without `--rebuild`, existing entries are preserved and new PDFs are added
 
 ## Error Handling
 
@@ -368,6 +500,8 @@ When manuals are updated (new PDFs downloaded from SharePoint):
 | Path doesn't exist | "Folder not found: `{path}`. Check the path." |
 | No PDFs in folder | "No PDF files found. Check that the folder contains `.pdf` files." |
 | Sub-agent fails for a PDF | Skip it, warn developer, continue with remaining |
+| Sub-agent uses wrong tool | Discard result, warn developer, suggest re-run |
 | Can't extract carrier name | Flag for manual assignment (Step 7) |
 | TOC extraction fails | Build approximate index from headings; note in manifest |
 | .docx files in folder | Skip — only `.pdf` files are supported. Warn developer. |
+| Index already exists, no changes | Show status, suggest --rebuild if needed |
