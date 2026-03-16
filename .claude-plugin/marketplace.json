@@ -14,7 +14,7 @@
         "repo": "muhammadut/rival-rating-extractor"
       },
       "description": "4 skills (re-init, re-query, re-bridge, re-index) + 2 agents (manual-reader, code-mapper). Reads rating manual PDFs with page citations and maps business rules to VB.NET code.",
-      "version": "0.1.3",
+      "version": "0.1.4",
       "license": "MIT",
       "keywords": ["insurance", "rating-manual", "pdf", "vbnet", "citations"]
     }

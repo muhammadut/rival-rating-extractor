@@ -12,54 +12,132 @@ user-invocable: true
 It answers questions about rating manuals with page citations and maps business rules
 to code locations. Carrier-agnostic — swap the PDFs and it works for any insurance company.
 
-## Requirements
+## Step 0: Pre-flight — Poppler Check (MUST RUN FIRST)
 
-- **Claude Code** — the core tool
-- **Poppler** — Claude's Read tool uses `pdftoppm` (from Poppler) to render PDF pages
-  as images for multimodal/visual reading. Without it, PDF reading fails silently and
-  agents fall back to Python text extractors (which is what we're trying to avoid).
-- **No Python PDF dependencies** — no PyMuPDF, no pdftotext, no Docling, no pdf-parse.
-  The Read tool with `pages` parameter is the ONLY PDF reader in this plugin.
-- Rating manual PDFs downloaded from SharePoint to a local folder
-
-### Poppler Setup (one-time)
-
+Before doing anything else, check if Poppler is installed. This plugin uses Claude's
+built-in Read tool to read PDFs as visual/multimodal input (Claude *sees* each page).
 The Read tool depends on `pdftoppm` from Poppler to render PDF pages as images.
+**Without Poppler, PDF reading silently fails and nothing works.**
 
-**Windows:**
-1. Download Poppler from https://github.com/oschwartz10612/poppler-windows/releases
-2. Extract to `C:\poppler-XX.XX.X\`
-3. Add `C:\poppler-XX.XX.X\Library\bin` to your system/user PATH
-4. Restart Claude Code (so it picks up the new PATH)
-
-**Mac:** `brew install poppler`
-**Linux:** `sudo apt install poppler-utils`
-
-### Step 0: Pre-flight — Verify Poppler
-
-Before doing anything else, verify `pdftoppm` is available:
+Run this check:
 
 ```
 Bash: pdftoppm -v
 ```
 
-If this fails with "not recognized" or "command not found":
+### If pdftoppm IS found (shows version like "pdftoppm version 25.12.0"):
+
+Great — proceed to Step 1. No further setup needed.
+
+### If pdftoppm is NOT found ("not recognized" / "command not found"):
+
+Tell the user:
+
 ```
-Poppler (pdftoppm) is required but not found.
+Poppler is required but not installed.
 
-The Read tool needs pdftoppm to render PDF pages as images for
-visual/multimodal reading. Without it, PDF reading will fail.
+This plugin reads insurance rating manual PDFs using Claude's built-in Read tool.
+The Read tool needs Poppler (pdftoppm) to render PDF pages as images so Claude
+can visually read tables, rate grids, and complex formatting.
 
-Install Poppler:
-  Windows: Download from https://github.com/oschwartz10612/poppler-windows/releases
-           Extract to C:\poppler-XX.XX.X\
-           Add C:\poppler-XX.XX.X\Library\bin to your PATH
-           Restart Claude Code
-
-  Mac:     brew install poppler
-  Linux:   sudo apt install poppler-utils
+Follow the steps below for your operating system:
 ```
-Stop here — do not proceed without Poppler.
+
+**Then detect the OS and show the right instructions:**
+
+#### Windows Setup:
+
+```
+STEP 1: Download Poppler
+  Go to: https://github.com/oschwartz10612/poppler-windows/releases
+  Download the latest .zip file (e.g., poppler-XX.XX.X.zip)
+
+STEP 2: Extract
+  Extract the zip to C:\poppler-XX.XX.X\
+  (You should see C:\poppler-XX.XX.X\Library\bin\pdftoppm.exe)
+
+STEP 3: Add to PATH
+  Open PowerShell as Administrator and run:
+
+  [Environment]::SetEnvironmentVariable("Path", [Environment]::GetEnvironmentVariable("Path", "Machine") + ";C:\poppler-XX.XX.X\Library\bin", "Machine")
+
+  Replace XX.XX.X with the actual version number you downloaded.
+
+STEP 4: Verify PATH was set
+  Close PowerShell. Open a NEW PowerShell window and run:
+
+  where.exe pdftoppm
+
+  You should see: C:\poppler-XX.XX.X\Library\bin\pdftoppm.exe
+  If you see "could not find files", the PATH was not set correctly — go back to Step 3.
+
+STEP 5: Restart VS Code / Claude Code
+  IMPORTANT: You must fully close and reopen VS Code (or your terminal).
+  Claude Code inherits the PATH from the process that launched it.
+  If you just restart Claude Code inside the same VS Code window, it may
+  still use the old PATH. Close the entire VS Code window, reopen it,
+  then start Claude Code again.
+
+STEP 6: Verify it works
+  Run /re-index again. I will re-check for pdftoppm.
+```
+
+#### Mac Setup:
+
+```
+STEP 1: Install via Homebrew
+  brew install poppler
+
+STEP 2: Verify
+  pdftoppm -v
+
+STEP 3: Restart Claude Code (close and reopen terminal)
+
+STEP 4: Run /re-index again
+```
+
+#### Linux Setup:
+
+```
+STEP 1: Install via apt
+  sudo apt install poppler-utils
+
+STEP 2: Verify
+  pdftoppm -v
+
+STEP 3: Restart Claude Code (close and reopen terminal)
+
+STEP 4: Run /re-index again
+```
+
+### Troubleshooting (if pdftoppm still not found after install):
+
+If the user says they installed Poppler but it's still not found, run these diagnostic steps:
+
+```
+# 1. Check if the file actually exists
+Bash: ls "C:/poppler-*/Library/bin/pdftoppm.exe" 2>/dev/null || echo "pdftoppm.exe not found on disk"
+
+# 2. Check if cmd.exe can find it (Windows PATH)
+Bash: cmd.exe //c "where pdftoppm" 2>/dev/null || echo "Not in Windows PATH"
+
+# 3. Check what PATH Claude Code's process sees
+Bash: echo "$PATH" | tr ':' '\n' | grep -i poppler || echo "Poppler not in bash PATH"
+```
+
+Then tell the user based on results:
+
+- **File exists but not in PATH:** "Poppler is installed but not in your PATH.
+  Open PowerShell as Administrator and run the command from Step 3 above."
+
+- **In Windows PATH but not bash PATH:** "PATH is set in Windows but Claude Code
+  can't see it. You need to fully close VS Code (not just restart the terminal)
+  and reopen it. The PATH is only picked up when a new process starts."
+
+- **File doesn't exist:** "The Poppler download may not have extracted correctly.
+  Check that `C:\poppler-XX.XX.X\Library\bin\pdftoppm.exe` exists."
+
+**Do NOT proceed past Step 0 until `pdftoppm -v` succeeds.**
 
 ## Context Management — Orchestrator Pattern
 
