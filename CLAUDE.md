@@ -46,6 +46,11 @@ pages as multimodal (visual) input — Claude literally *sees* each page like a 
 This is critical for insurance rating manuals which contain dense rate grids, complex tables,
 merged cells, and formatted layouts that text-extraction libraries mangle.
 
+**Requires Poppler** (`pdftoppm`) — the Read tool uses it to render PDF pages as images.
+Without it, PDF reading fails and agents fall back to Python (which we don't want).
+Install: Windows → download from GitHub releases, add `Library\bin` to PATH.
+Mac → `brew install poppler`. Linux → `sudo apt install poppler-utils`.
+
 **No Python PDF libraries.** No PyMuPDF, no Docling, no Marker, no pdftotext, no text parsers.
 The Read tool with `pages` parameter is the only PDF reader in this plugin.
 Call it as: `Read(file_path="{path}", pages="1-5")` — NEVER use Bash or Python to read PDFs.

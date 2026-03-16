@@ -1,6 +1,6 @@
 {
   "name": "rating-extractor",
-  "version": "0.1.2",
+  "version": "0.1.3",
   "description": "Bridges insurance rating manual PDFs with VB.NET carrier code. Answers manual questions with page citations and maps rules to code locations.",
   "keywords": ["insurance", "rating-manual", "pdf", "vbnet", "citations"]
 }

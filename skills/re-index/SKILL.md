@@ -14,14 +14,52 @@ to code locations. Carrier-agnostic — swap the PDFs and it works for any insur
 
 ## Requirements
 
-- **Claude Code** — that's it
-- **Claude's built-in Read tool** reads PDFs natively as multimodal (visual) input.
-  Claude *sees* each page — dense rate grids, complex tables, merged cells, footnotes —
-  exactly as a human would.
-- **No external dependencies** — no Python, no PyMuPDF, no pdftotext, no Docling, no
-  pdf-parse, no pdfjs-dist, no vector stores. The Read tool with `pages` parameter is
-  the ONLY PDF reader in this plugin.
+- **Claude Code** — the core tool
+- **Poppler** — Claude's Read tool uses `pdftoppm` (from Poppler) to render PDF pages
+  as images for multimodal/visual reading. Without it, PDF reading fails silently and
+  agents fall back to Python text extractors (which is what we're trying to avoid).
+- **No Python PDF dependencies** — no PyMuPDF, no pdftotext, no Docling, no pdf-parse.
+  The Read tool with `pages` parameter is the ONLY PDF reader in this plugin.
 - Rating manual PDFs downloaded from SharePoint to a local folder
+
+### Poppler Setup (one-time)
+
+The Read tool depends on `pdftoppm` from Poppler to render PDF pages as images.
+
+**Windows:**
+1. Download Poppler from https://github.com/oschwartz10612/poppler-windows/releases
+2. Extract to `C:\poppler-XX.XX.X\`
+3. Add `C:\poppler-XX.XX.X\Library\bin` to your system/user PATH
+4. Restart Claude Code (so it picks up the new PATH)
+
+**Mac:** `brew install poppler`
+**Linux:** `sudo apt install poppler-utils`
+
+### Step 0: Pre-flight — Verify Poppler
+
+Before doing anything else, verify `pdftoppm` is available:
+
+```
+Bash: pdftoppm -v
+```
+
+If this fails with "not recognized" or "command not found":
+```
+Poppler (pdftoppm) is required but not found.
+
+The Read tool needs pdftoppm to render PDF pages as images for
+visual/multimodal reading. Without it, PDF reading will fail.
+
+Install Poppler:
+  Windows: Download from https://github.com/oschwartz10612/poppler-windows/releases
+           Extract to C:\poppler-XX.XX.X\
+           Add C:\poppler-XX.XX.X\Library\bin to your PATH
+           Restart Claude Code
+
+  Mac:     brew install poppler
+  Linux:   sudo apt install poppler-utils
+```
+Stop here — do not proceed without Poppler.
 
 ## Context Management — Orchestrator Pattern
 
