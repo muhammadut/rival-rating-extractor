@@ -39,6 +39,39 @@ If `.re-workstreams/paths.md` does not exist, tell the developer: `"Run /re-init
 Each command runs in a **fresh context window**. The developer can `/clear` between
 commands with zero information loss — all state is persisted on disk.
 
+## Core Principle: Native PDF Reading
+
+This plugin uses **Claude's built-in Read tool** to read PDFs. The Read tool sends PDF
+pages as multimodal (visual) input — Claude literally *sees* each page like a human would.
+This is critical for insurance rating manuals which contain dense rate grids, complex tables,
+merged cells, and formatted layouts that text-extraction libraries mangle.
+
+**No Python PDF libraries.** No PyMuPDF, no Docling, no Marker, no text parsers.
+The Read tool with `pages` parameter is the only PDF reader in this plugin.
+
+## Context Management — Orchestrator + Sub-Agent Pattern
+
+Inspired by the iq-update plugin's capsule architecture. Every `/re-*` command is a
+**lightweight orchestrator** that delegates heavy work to sub-agents:
+
+1. **Orchestrator (main context)** — reads paths, routes queries, aggregates results.
+   NEVER reads PDFs directly. NEVER touches heavy context inline.
+2. **Sub-agents** — receive a self-contained brief, do the heavy reading (PDFs, code),
+   return a concise structured result (~1-2K tokens).
+3. **Main context stays clean** — the developer can `/clear` between commands with
+   zero information loss. All state is persisted on disk.
+
+| Command | Orchestrator Does | Sub-Agent Does |
+|---------|-------------------|----------------|
+| `/re-index` | Scans folder, lists PDFs, builds briefs | Reads PDF pages 1-10, extracts metadata + TOC |
+| `/re-query` | Reads paths.md, routes via TOC keywords | Reads targeted PDF pages, answers with citations |
+| `/re-bridge` | Reads paths.md, coordinates both agents | manual-reader: PDF answer; code-mapper: VB.NET location |
+| `/re-init` | Runs inline (lightweight — no PDFs) | No sub-agents needed |
+
+**Why sub-agents for PDFs:** Each 20-page PDF Read consumes ~50K tokens of multimodal
+context. Reading 21 PDFs inline (like during `/re-index`) would consume ~500K+ tokens,
+causing compaction and degraded reasoning. Sub-agents isolate this cost.
+
 ## Key Rules
 
 1. **`/re-index` before `/re-init`** — catalog must exist before carrier init
@@ -48,10 +81,8 @@ commands with zero information loss — all state is persisted on disk.
 5. **Page citations are mandatory** — every answer must include manual slug, page numbers, and quoted source text
 6. **20-page Read limit** — Claude's Read tool handles max 20 PDF pages per call; split larger ranges into multiple reads
 7. **Fresh context per command** — each `/re-*` command reads ALL state from disk, never from memory
-8. **Windows path safety** — use Python `os.path` for path operations, never bash string manipulation
-9. **Python-only for scripting** — use Python for YAML generation, PDF processing, data operations
-10. **NEVER use `sleep`** — if an agent call fails, log the error and fall back; no retry loops
-11. **Graceful degradation** — `/re-query` works after init; `/re-bridge` warns if vb-parser unavailable
+8. **NEVER use `sleep`** — if an agent call fails, log the error and fall back; no retry loops
+9. **Graceful degradation** — `/re-query` works after init; `/re-bridge` warns if vb-parser unavailable
 
 ## Plugin Architecture
 
@@ -68,9 +99,7 @@ rating-extractor/                        <- PLUGIN CODE (ships to marketplace)
     code-mapper.md                       <- Maps manual rules to VB.NET code
   contracts/
     contract_registry.yaml               <- Artifact schemas (source of truth)
-  tools/
-    build_index.py                       <- Automated TOC extraction (PyMuPDF)
-    split_manuals.py                     <- PDF chunking (Phase 3)
+  tools/                                 <- Reserved for future non-PDF tooling (e.g., vb-parser wrappers)
   knowledge/
     prompt.md                            <- Bootstrap spec (reference)
     rating_manual/                       <- Sample PDFs (gitignored)
@@ -88,7 +117,7 @@ rating-extractor/                        <- PLUGIN CODE (ships to marketplace)
 
 ```
 /re-index:
-  PDF folder → [Read first pages] → manual-catalog.yaml + manual-index/{slug}/toc.yaml
+  PDF folder → [sub-agents read first pages] → manual-catalog.yaml + manual-index/{slug}/toc.yaml
 
 /re-init:
   CWD carrier name + manual-catalog.yaml → .re-workstreams/paths.md + config.yaml
@@ -97,7 +126,7 @@ rating-extractor/                        <- PLUGIN CODE (ships to marketplace)
   Question + toc.yaml keyword matching → manual-reader sub-agent → Cited Answer
 
 /re-bridge:
-  Question → manual-reader → code-mapper sub-agent → Manual + Code Result
+  Question → manual-reader sub-agent → code-mapper sub-agent → Manual + Code Result
 ```
 
 ## TOC Routing Strategy

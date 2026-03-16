@@ -124,10 +124,6 @@ Note: This doesn't look like a standard TBW carrier folder (no province/LOB stru
    - If found: record path
    - If not found: record "NOT_FOUND" (warning will be shown by `/re-bridge`)
 
-2. **Python:**
-   - Check `python --version`
-   - Record the working command
-
 ### Step 5: Write Configuration Files
 
 1. **Create `{carrier_root}/.re-workstreams/` directory**
@@ -149,8 +145,6 @@ Note: This doesn't look like a standard TBW carrier folder (no province/LOB stru
    | manual_reader_agent | {plugin_root}/agents/manual-reader.md |
    | code_mapper_agent | {plugin_root}/agents/code-mapper.md |
    | contract_registry | {plugin_root}/contracts/contract_registry.yaml |
-   | build_index_tool | {plugin_root}/tools/build_index.py |
-   | python_cmd | {python or python3} |
    | vb_parser | {path or NOT_FOUND} |
    | manual:{slug} | {absolute path to each matched PDF} |
    | toc:{slug} | {absolute path to each toc.yaml in plugin_root/knowledge/manual-index/} |
@@ -189,7 +183,6 @@ Note: This doesn't look like a standard TBW carrier folder (no province/LOB stru
 
    tools:
      vb_parser: "E:\\...\\vb-parser.exe"  # or "NOT_FOUND"
-     python_cmd: "python"
    ```
 
 ### Step 6: Present Summary
@@ -207,7 +200,6 @@ Carrier structure:
 
 Tools:
   - vb-parser: Found
-  - Python: 3.11.4
 
 Ready:
   /re-query "What is the genNow! discount?"

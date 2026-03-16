@@ -12,6 +12,9 @@ citations. Runs as a **sub-agent** to isolate the large PDF context (~50K tokens
 - By `/re-bridge` Phase 1 (same routing, same agent)
 - Always via the Agent tool with `subagent_type: "general-purpose"`
 
+**NOT used by `/re-index`** — that command spawns its own lightweight extraction agents
+with a different brief (metadata + TOC extraction, not question-answering).
+
 ## Input
 
 The spawning skill provides ALL of the following in the agent prompt:

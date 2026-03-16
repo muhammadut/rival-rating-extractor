@@ -44,8 +44,6 @@ artifacts:
       - manual_reader_agent
       - code_mapper_agent
       - contract_registry
-      - build_index_tool
-      - python_cmd
       - vb_parser           # "NOT_FOUND" if unavailable
     dynamic_keys:
       - "manual:{slug}"     # one per discovered manual
@@ -54,7 +52,7 @@ artifacts:
   config_yaml:
     description: "Carrier metadata, manual inventory, and structural information."
     produced_by: "/re-init"
-    consumed_by: ["/re-query", "/re-bridge", "/re-index"]
+    consumed_by: ["/re-query", "/re-bridge"]
     location: "{carrier_root}/.re-workstreams/config.yaml"
     format: "yaml"
     schema:
@@ -64,10 +62,11 @@ artifacts:
       manuals:
         - slug: "string (kebab-case)"
           title: "string"
-          filename: "string"
-          path: "string (absolute path)"
+          lob: "string"
+          province: "string (2-letter)"
+          effective_date: "string (YYYY-MM-DD)"
+          source_path: "string (absolute path to PDF)"
           total_pages: "integer"
-          indexed: "boolean"
       provinces:                 # optional, for /re-bridge
         - code: "string (2-letter)"
           name: "string"
@@ -76,7 +75,6 @@ artifacts:
       carrier_prefix: "string"  # optional, e.g., "PORT"
       tools:
         vb_parser: "string (path or NOT_FOUND)"
-        python_cmd: "string"
 
   # ── Manual Index ─────────────────────────────────────────────────────
 

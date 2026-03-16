@@ -6,6 +6,19 @@ user-invocable: true
 
 # /re-bridge — Bridge Manual Logic to VB.NET Code
 
+## Context Management — Orchestrator Pattern
+
+**The orchestrator (this command) NEVER reads PDFs or code files directly.** It
+coordinates two sub-agents sequentially:
+
+1. Orchestrator reads paths.md + toc.yaml (lightweight keyword routing)
+2. Orchestrator spawns **manual-reader sub-agent** → receives cited answer (~1-2K tokens)
+3. Orchestrator extracts business rules from the answer (stays in main context — small)
+4. Orchestrator spawns **code-mapper sub-agent** → receives code locations (~1-2K tokens)
+5. Orchestrator combines both results and presents to the developer
+
+No PDF content or VB.NET code files ever enter the main context window.
+
 ## Purpose
 
 The killer feature. Takes a question about a rating manual, gets a cited answer

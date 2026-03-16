@@ -6,6 +6,19 @@ user-invocable: true
 
 # /re-query — Ask a Question About a Rating Manual
 
+## Context Management — Orchestrator Pattern
+
+**The orchestrator (this command) NEVER reads PDFs directly.** It handles only
+lightweight operations (reading paths.md, reading toc.yaml for keyword routing)
+and delegates all PDF reading to a **manual-reader sub-agent**.
+
+1. Orchestrator reads paths.md + toc.yaml (small YAML, ~1-2K tokens)
+2. Orchestrator does keyword matching to identify target page ranges
+3. Orchestrator spawns manual-reader sub-agent with a self-contained brief
+4. Sub-agent reads PDF pages via Read tool (heavy — ~50K tokens per 20 pages)
+5. Sub-agent returns concise cited answer (~1-2K tokens)
+6. Orchestrator presents the result to the developer
+
 ## Purpose
 
 Takes a natural language question about an insurance rating manual and returns a cited
@@ -30,7 +43,7 @@ Optional flags:
 
 - `$ARGUMENTS` — the question (required) + optional flags
 - `.re-workstreams/paths.md` — resolved paths (MUST read first)
-- `.re-workstreams/manual-index/{slug}/toc.yaml` — TOC for each manual
+- `toc:{slug}` from paths.md — TOC for each manual (lives in plugin_root/knowledge/manual-index/)
 
 ## Outputs
 
